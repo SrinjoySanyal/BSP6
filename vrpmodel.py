@@ -4,6 +4,9 @@ import itertools
 from sklearn.manifold import MDS
 import matplotlib.pyplot
 import matplotlib.colors
+import keras
+import numpy
+import random
 
 options = {
     "WLSACCESSID": "9aadbf35-dba3-4158-b503-3b68b4e0d6dd",
@@ -12,6 +15,7 @@ options = {
 }
 
 env = gurobipy.Env(params=options)
+colors = ["red", "yellow", "green", "blue", "black"]
 
 V = 17
 L = 3
@@ -37,10 +41,10 @@ d = [
 
 mapper = MDS(n_components=2)
 map = mapper.fit_transform(d)
-print(map[1][0])
-matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
-matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
-colors = ["red", "yellow", "green", "blue", "black"]
+# print(map[1][0])
+
+value = 0
+#value = value + (value - optimizer(S))
 
 #subtour elimination
 def Combination(n, set):
@@ -49,17 +53,19 @@ def Combination(n, set):
     for i in range(2, n):
         Q.append(list(itertools.combinations(set, i)))
     
-    result = []
+    result = [[]]
     for i in Q:
         for j in i:
             result.append(list(j))
     
     return result
 
-Vmin0 = list(range(1, V))
+Vmin0 = list(range(2, V))
 S = Combination(V - 1, Vmin0)
 
 def optimizer(S):
+    matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
+    matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
     m = gurobipy.Model("vrp", env=env)
     #create variables
     x = {}
@@ -113,4 +119,112 @@ def optimizer(S):
                             matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])
                         
     matplotlib.pyplot.savefig("map.png")
-    return m.getAttr("ObjVal")
+    matplotlib.pyplot.close()
+    return [m.getAttr("ObjVal"), names, values]
+
+def go(start, looped, V, L, names, values):
+    if start == 0:
+        return looped
+    else:
+        for name, val in zip(names, values):
+            for t in range(L):
+                for j in range(V):
+                    if name == "x(%s,%s,%s)"%(start, j, t) and val != 0:
+                        looped[j] = 1
+                        # print(looped)
+                        return go(j, looped, V, L, names, values)
+
+def checkSubtour(V, L, names, values):
+    looped = [0 for i in range(V)]
+    toreach = []
+    for name, val in zip(names, values):
+        for t in range(L):
+            for j in range(V):
+                if name == "x(%s,%s,%s)"%(0,j,t) and val != 0:
+                    looped[j] = 1
+                    toreach.append(j)
+                    
+    for elem in toreach:
+        looped = go(elem, looped, V, L, names, values)
+    return [i for i in range(V) if looped[i] == 0]
+    
+# arr = optimizer([]) 
+# print(checkSubtour(V, L, arr[1], arr[2]))
+    
+class Agent:
+    def __init__(self, S):
+        self.state_size = len(S)
+        self.action_size = len(S)
+        self.memory = []
+        self.gamma = 0.95
+        self.epsilon = 1.0
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        self.model = self.model()
+        
+    def model(self):
+        model = keras.Sequential()
+        model.add(keras.layers.Dense(24, input_dim=1, activation='relu'))
+        model.add(keras.layers.Dense(24, activation='relu'))
+        model.add(keras.layers.Dense(self.action_size, activation='linear'))
+        model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
+        return model
+    
+    def action(self, state):
+        if numpy.random.rand() <= self.epsilon:
+            return numpy.random.randint(self.action_size)
+        q_values = self.model.predict(numpy.array([state]))
+        return numpy.argmax(q_values[0])
+    
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append([state, action, reward, next_state, done])
+        print("memory: ", self.memory)
+        
+    
+    def tuning(self, batch_size):
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            target = reward
+            if not done:
+                target = reward + self.gamma * numpy.amax(self.model.predict(numpy.array([next_state]))[0])
+            # print(list(state))
+            target_f = self.model.predict(numpy.array([state]))
+            target_f[0][action] = target
+            self.model.fit(numpy.array([state]), target_f, epochs=1, verbose=0)
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+agent = Agent(S)
+batch = 20
+episodes = 5000
+
+for episode in range(episodes):
+    done = False
+    itnum = 0
+    SEC = []
+    state = 0
+    reward = 0
+    opt = optimizer(SEC)
+    result = opt[0] + 10000*len(checkSubtour(V, L, opt[1], opt[2]))
+    while not done and itnum < len(S):
+        act = agent.action(state)
+        # next = S[act] 
+        SEC.append(S[act])
+        opt = optimizer(SEC)
+        subtours = checkSubtour(V, L, opt[1], opt[2])
+        result1 = opt[0] + 10000*len(subtours)
+        if len(subtours) == 0:
+                reward += 100000
+        if result1 < result and itnum < len(S):
+            reward = reward - result1
+            result = result1
+            agent.remember(state, act, reward, act, done)
+            state = act
+            itnum += 1
+            if len(agent.memory)%batch == 0:
+                agent.tuning(batch)
+        else:
+            if len(agent.memory) > 0:
+                agent.memory[len(agent.memory)-1][4] = True
+                done = True          
+        
