@@ -44,6 +44,12 @@ mapper = MDS(n_components=2)
 map = mapper.fit_transform(d)
 # print(map[1][0])
 
+totaldist = 0
+for i in range(V):
+    for j in range(V):
+        if d[i][j] != 9999:
+            totaldist += d[i][j]
+
 value = 0
 #value = value + (value - optimizer(S))
 
@@ -61,10 +67,11 @@ def Combination(n, set):
     
     return result
 
-Vmin0 = list(range(2, V))
-S = Combination(V - 1, Vmin0)
+# V = 5
+nodesMin0 = list(range(1, V))
+S = Combination(V - 1, nodesMin0)
 
-def optimizer(S):
+def optimizer(S, V, L, map, d):
     try:
         matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
         matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
@@ -209,9 +216,6 @@ def checkSubtour(V, L, names, values):
         looped = go(elem, looped, V, L, names, values)
     return [i for i in range(V) if looped[i] == 0]
     
-# arr = optimizer([]) 
-# print(checkSubtour(V, L, arr[1], arr[2]))
-    
 class Agent:
     def __init__(self, S):
         self.state_size = len(S)
@@ -220,30 +224,48 @@ class Agent:
         self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.75
+        self.epsilon_decay = 0.90
         self.model = self.model()
         
     def model(self):
         model = keras.Sequential()
-        model.add(keras.layers.Dense(128, input_dim=1, activation='relu'))
-        model.add(keras.layers.Dense(128, input_dim=128, activation='relu'))
+        model.add(keras.layers.Dense(50, input_dim=1, activation='relu'))
+        model.add(keras.layers.Dense(50, input_dim=50, activation='relu'))
         model.add(keras.layers.Dense(self.action_size, activation='linear'))
         model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
         return model
     
     def action(self, state):
-        eps = self.epsilon*math.exp(-1*1/self.epsilon_decay)
         if numpy.random.rand() <= self.epsilon:
             return numpy.random.randint(self.action_size)
         q_values = self.model.predict(numpy.array([state]))
         return numpy.argmax(q_values[0])
     
     def remember(self, state, action, reward, next_state, done, orphans):
-        if [state, action, reward, next_state, done] not in self.memory:
-            self.memory.append([state, action, reward, next_state, done])
-        if [state, action, reward, next_state, done] in self.memory and orphans == 0:
-            self.memory.append([state, action, reward, next_state, done])
-        print("memory: ", self.memory)
+        # if [state, action, reward, next_state, done] not in self.memory:
+        #     self.memory.append([state, action, reward, next_state, done])
+        # if [state, action, reward, next_state, done] in self.memory and orphans == 0:
+        #     self.memory.append([state, action, reward, next_state, done])
+        self.memory.append([state, action, reward, next_state, done])
+        if reward > 0 and done == True:
+            if self.epsilon > self.epsilon_min:
+                self.epsilon *= self.epsilon_decay
+            for j in range(100):
+                goodpath = []
+                for i in range(len(self.memory) - 1, 0, -1):
+                    goodpath.append(self.memory[i])
+                    self.memory[i][2] = reward
+                    if self.memory[i][0] == 0:
+                        break
+                for elem in goodpath[::-1]:
+                    self.memory.append(elem)    
+        f = open("memory.txt", "w")
+        content = ""
+        for elem in self.memory:
+            content += str(elem) + "\n"
+        f.write(content)
+        f.close()
+        # print("memory: ", self.memory)
         
     
     def tuning(self, batch_size):
@@ -266,7 +288,7 @@ class Agent:
 
 agent = Agent(S)
 batch = 30
-episodes = 1000
+episodes = 2000
 
 for episode in range(episodes):
     done = False
@@ -274,20 +296,21 @@ for episode in range(episodes):
     SEC = []
     state = 0
     reward = 0
-    opt = optimizer(SEC)
+    opt = optimizer(SEC, V, L, map, d)
     subtours = checkSubtour(V, L, opt[1], opt[2])
-    result = opt[0] + 100000*len(subtours)**2
-    while not done and itnum < len(S):
+    result = opt[0] + 100*len(subtours)**2
+    if len(subtours) == 0:
+        reward += opt[0]
+    while not done and itnum <= len(S):
         act = agent.action(state)
         # next = S[act] 
         SEC.append(S[act])
-        opt = optimizer(SEC)
+        opt = optimizer(SEC, V, L, map, d)
         subtours = checkSubtour(V, L, opt[1], opt[2])
-        result1 = opt[0] + 100000*len(subtours)**2
-        if result1 < result and itnum < len(S):
-            reward = reward - result1
+        result1 = opt[0] + 100*len(subtours)**2
+        if result1 < result and itnum <= len(S):
             if len(subtours) == 0:
-                reward += 100000**2
+                reward += (totaldist - opt[0])
                 done = True
             result = result1
             agent.remember(state, act, reward, act, done, len(subtours))
@@ -298,5 +321,4 @@ for episode in range(episodes):
         else:
             if len(agent.memory) > 0:
                 agent.memory[len(agent.memory)-1][4] = True
-                done = True       
-        
+                done = True     
