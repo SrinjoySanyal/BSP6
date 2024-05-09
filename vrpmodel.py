@@ -9,67 +9,18 @@ import numpy
 import random
 import math
 
-options = {
-    "WLSACCESSID": "9aadbf35-dba3-4158-b503-3b68b4e0d6dd",
-    "WLSSECRET": "2cd0ea41-6f53-419b-8696-c93718870444",
-    "LICENSEID": 2489877,
-}
-
-env = gurobipy.Env(params=options)
-colors = ["red", "yellow", "green", "blue", "black"]
-
-V = 17
-L = 3
-d = [
- [9999, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 0, 3, 5, 8, 8, 5],
- [3, 9999, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 0, 3, 8, 8, 5],
- [5, 3, 9999, 72, 72, 48, 48, 24, 24, 3, 3, 5, 3, 0, 48, 48, 24],
- [48, 48, 74, 9999, 0, 6, 6, 12, 12, 48, 48, 48, 48, 74, 6, 6, 12],
- [48, 48, 74, 0, 9999, 6, 6, 12, 12, 48, 48, 48, 48, 74, 6, 6, 12],
- [8, 8, 50, 6, 6, 9999, 0, 8, 8, 8, 8, 8, 8, 50, 0, 0, 8],
- [8, 8, 50, 6, 6, 0, 9999, 8, 8, 8, 8, 8, 8, 50, 0, 0, 8],
- [5, 5, 26, 12, 12, 8, 8, 9999, 0, 5, 5, 5, 5, 26, 8, 8, 0],
- [5, 5, 26, 12, 12, 8, 8, 0, 9999, 5, 5, 5, 5, 26, 8, 8, 0],
- [3, 0, 3, 48, 48, 8, 8, 5, 5, 9999, 0, 3, 0, 3, 8, 8, 5],
- [3, 0, 3, 48, 48, 8, 8, 5, 5, 0, 9999, 3, 0, 3, 8, 8, 5],
- [0, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 9999, 3, 5, 8, 8, 5],
- [3, 0, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 9999, 3, 8, 8, 5],
- [5, 3, 0, 72, 72, 48, 48, 24, 24, 3, 3, 5, 3, 9999, 48, 48, 24],
- [8, 8, 50, 6, 6, 0, 0, 8, 8, 8, 8, 8, 8, 50, 9999, 0, 8],
- [8, 8, 50, 6, 6, 0, 0, 8, 8, 8, 8, 8, 8, 50, 0, 9999, 8],
- [5, 5, 26, 12, 12, 8, 8, 0, 0, 5, 5, 5, 5, 26, 8, 8, 9999]
-]
-
-mapper = MDS(n_components=2)
-map = mapper.fit_transform(d)
-# print(map[1][0])
-
-totaldist = 0
-for i in range(V):
-    for j in range(V):
-        if d[i][j] != 9999:
-            totaldist += d[i][j]
-
-value = 0
-#value = value + (value - optimizer(S))
-
-#subtour elimination
 def Combination(n, set):
     Q = []
     
     for i in range(2, n):
         Q.append(list(itertools.combinations(set, i)))
     
-    result = [[]]
+    result = []
     for i in Q:
         for j in i:
             result.append(list(j))
     
     return result
-
-# V = 5
-nodesMin0 = list(range(1, V))
-S = Combination(V - 1, nodesMin0)
 
 def optimizer(S, V, L, map, d):
     try:
@@ -126,10 +77,12 @@ def optimizer(S, V, L, map, d):
                         for j in range(V):
                             if val != 0 and "(%s,%s,%s)"%(i, j, t) in name:
                                 matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])
+                                matplotlib.pyplot.axis("off")
                             
         matplotlib.pyplot.savefig("map.png")
         matplotlib.pyplot.close()
         return [m.getAttr("ObjVal"), names, values]
+    
     except AttributeError:
         matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
         matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
@@ -185,10 +138,11 @@ def optimizer(S, V, L, map, d):
                     for i in range(V):
                         for j in range(V):
                             if val != 0 and "(%s,%s,%s)"%(i, j, t) in name:
-                                matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])               
+                                matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])    
+                                matplotlib.pyplot.axis("off")           
         matplotlib.pyplot.savefig("map.png")
         matplotlib.pyplot.close()
-        return [1000000*V**2, names, values]
+        return [1000000, names, values]
 
 def go(start, looped, V, L, names, values):
     if start == 0:
@@ -224,7 +178,7 @@ class Agent:
         self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.90
+        self.epsilon_decay = 0.75
         self.model = self.model()
         
     def model(self):
@@ -241,13 +195,11 @@ class Agent:
         q_values = self.model.predict(numpy.array([state]))
         return numpy.argmax(q_values[0])
     
-    def remember(self, state, action, reward, next_state, done, orphans):
-        # if [state, action, reward, next_state, done] not in self.memory:
-        #     self.memory.append([state, action, reward, next_state, done])
-        # if [state, action, reward, next_state, done] in self.memory and orphans == 0:
-        #     self.memory.append([state, action, reward, next_state, done])
+    def remember(self, state, action, reward, next_state, done, objVal, modelObj):
         self.memory.append([state, action, reward, next_state, done])
         if reward > 0 and done == True:
+            print("Deep RL solution: ", objVal)
+            print("Optimal solution: ", modelObj)
             if self.epsilon > self.epsilon_min:
                 self.epsilon *= self.epsilon_decay
             for j in range(100):
@@ -265,9 +217,7 @@ class Agent:
             content += str(elem) + "\n"
         f.write(content)
         f.close()
-        # print("memory: ", self.memory)
         
-    
     def tuning(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
         for elem in minibatch:
@@ -283,8 +233,53 @@ class Agent:
             Q = self.model.predict(numpy.array([state]))
             Q[0][action] = target
             self.model.fit(x=numpy.array([state]), y=Q)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        # if self.epsilon > self.epsilon_min:
+        #     self.epsilon *= self.epsilon_decay
+
+options = {
+    "WLSACCESSID": "9aadbf35-dba3-4158-b503-3b68b4e0d6dd",
+    "WLSSECRET": "2cd0ea41-6f53-419b-8696-c93718870444",
+    "LICENSEID": 2489877,
+}
+
+env = gurobipy.Env(params=options)
+colors = ["red", "yellow", "green", "blue", "black"]
+
+V = 17
+L = 3
+d = [
+ [9999, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 0, 3, 5, 8, 8, 5],
+ [3, 9999, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 0, 3, 8, 8, 5],
+ [5, 3, 9999, 72, 72, 48, 48, 24, 24, 3, 3, 5, 3, 0, 48, 48, 24],
+ [48, 48, 74, 9999, 0, 6, 6, 12, 12, 48, 48, 48, 48, 74, 6, 6, 12],
+ [48, 48, 74, 0, 9999, 6, 6, 12, 12, 48, 48, 48, 48, 74, 6, 6, 12],
+ [8, 8, 50, 6, 6, 9999, 0, 8, 8, 8, 8, 8, 8, 50, 0, 0, 8],
+ [8, 8, 50, 6, 6, 0, 9999, 8, 8, 8, 8, 8, 8, 50, 0, 0, 8],
+ [5, 5, 26, 12, 12, 8, 8, 9999, 0, 5, 5, 5, 5, 26, 8, 8, 0],
+ [5, 5, 26, 12, 12, 8, 8, 0, 9999, 5, 5, 5, 5, 26, 8, 8, 0],
+ [3, 0, 3, 48, 48, 8, 8, 5, 5, 9999, 0, 3, 0, 3, 8, 8, 5],
+ [3, 0, 3, 48, 48, 8, 8, 5, 5, 0, 9999, 3, 0, 3, 8, 8, 5],
+ [0, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 9999, 3, 5, 8, 8, 5],
+ [3, 0, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 9999, 3, 8, 8, 5],
+ [5, 3, 0, 72, 72, 48, 48, 24, 24, 3, 3, 5, 3, 9999, 48, 48, 24],
+ [8, 8, 50, 6, 6, 0, 0, 8, 8, 8, 8, 8, 8, 50, 9999, 0, 8],
+ [8, 8, 50, 6, 6, 0, 0, 8, 8, 8, 8, 8, 8, 50, 0, 9999, 8],
+ [5, 5, 26, 12, 12, 8, 8, 0, 0, 5, 5, 5, 5, 26, 8, 8, 9999]
+]
+
+nodesMin0 = list(range(1, V))
+S = Combination(V - 1, nodesMin0)
+
+mapper = MDS(n_components=2)
+map = mapper.fit_transform(d)
+
+totaldist = 0
+for i in range(V):
+    for j in range(V):
+        if d[i][j] != 9999:
+            totaldist += d[i][j]
+
+objective = optimizer(S, V, L, map, d)
 
 agent = Agent(S)
 batch = 30
@@ -313,7 +308,7 @@ for episode in range(episodes):
                 reward += (totaldist - opt[0])
                 done = True
             result = result1
-            agent.remember(state, act, reward, act, done, len(subtours))
+            agent.remember(state, act, reward, act, done, opt[0], objective[0])
             state = act
             itnum += 1
             if len(agent.memory)>batch:
@@ -322,3 +317,7 @@ for episode in range(episodes):
             if len(agent.memory) > 0:
                 agent.memory[len(agent.memory)-1][4] = True
                 done = True     
+    if agent.epsilon <= agent.epsilon_min:
+        print("Deep RL solution: ", opt[0])
+        print("Optimal solution: ", objective[0])
+        break
