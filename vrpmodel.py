@@ -180,12 +180,14 @@ class Agent:
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.75
         self.model = self.model()
+        self.explore = 0
+        self.seclen = 0
         
     def model(self):
         model = keras.Sequential()
-        model.add(keras.layers.Dense(50, input_dim=1, activation='relu'))
-        model.add(keras.layers.Dense(50, input_dim=50, activation='relu'))
-        model.add(keras.layers.Dense(self.action_size, activation='linear'))
+        model.add(keras.layers.Dense(50, input_dim=1, activation='linear'))
+        model.add(keras.layers.Dense(50, input_dim=50, activation='linear'))
+        model.add(keras.layers.Dense(self.action_size, activation='relu'))
         model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
         return model
     
@@ -198,6 +200,7 @@ class Agent:
     def remember(self, state, action, reward, next_state, done, objVal, modelObj):
         self.memory.append([state, action, reward, next_state, done])
         if reward > 0 and done == True:
+            print("optim found")
             print("Deep RL solution: ", objVal)
             print("Optimal solution: ", modelObj)
             if self.epsilon > self.epsilon_min:
@@ -207,7 +210,7 @@ class Agent:
                 for i in range(len(self.memory) - 1, 0, -1):
                     goodpath.append(self.memory[i])
                     self.memory[i][2] = reward
-                    if self.memory[i][0] == 0:
+                    if self.memory[i][0] == -1:
                         break
                 for elem in goodpath[::-1]:
                     self.memory.append(elem)    
@@ -217,6 +220,10 @@ class Agent:
             content += str(elem) + "\n"
         f.write(content)
         f.close()
+        if self.explore >= self.action_size:
+            self.explore = 0
+            self.seclen += 1
+        self.explore += 1
         
     def tuning(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
@@ -246,7 +253,7 @@ env = gurobipy.Env(params=options)
 colors = ["red", "yellow", "green", "blue", "black"]
 
 V = 17
-L = 3
+L = 4
 d = [
  [9999, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 0, 3, 5, 8, 8, 5],
  [3, 9999, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 0, 3, 8, 8, 5],
@@ -281,43 +288,45 @@ for i in range(V):
 
 objective = optimizer(S, V, L, map, d)
 
+init = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]]
+
+for elem in init:
+    if elem in S:
+        S.remove(elem)
+
 agent = Agent(S)
-batch = 30
-episodes = 2000
+batch = 100
+episodes = 10000
 
 for episode in range(episodes):
     done = False
     itnum = 0
-    SEC = []
-    state = 0
+    SEC = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]]
+    state = -1
     reward = 0
     opt = optimizer(SEC, V, L, map, d)
     subtours = checkSubtour(V, L, opt[1], opt[2])
-    result = opt[0] + 100*len(subtours)**2
     if len(subtours) == 0:
         reward += opt[0]
-    while not done and itnum <= len(S):
+    while not done and itnum <= agent.seclen:
         act = agent.action(state)
         # next = S[act] 
         SEC.append(S[act])
         opt = optimizer(SEC, V, L, map, d)
         subtours = checkSubtour(V, L, opt[1], opt[2])
-        result1 = opt[0] + 100*len(subtours)**2
-        if result1 < result and itnum <= len(S):
-            if len(subtours) == 0:
-                reward += (totaldist - opt[0])
-                done = True
-            result = result1
-            agent.remember(state, act, reward, act, done, opt[0], objective[0])
-            state = act
-            itnum += 1
-            if len(agent.memory)>batch:
-                agent.tuning(batch)
-        else:
-            if len(agent.memory) > 0:
-                agent.memory[len(agent.memory)-1][4] = True
-                done = True     
+        if len(subtours) == 0:
+            reward += (totaldist - opt[0])
+            done = True
+        agent.remember(state, act, reward, act, done, opt[0], objective[0])
+        state = act
+        itnum += 1
+        if len(agent.memory)>batch:
+            agent.tuning(batch)
+    if len(agent.memory) > 0:
+        agent.memory[len(agent.memory)-1][4] = True
+        done = True     
     if agent.epsilon <= agent.epsilon_min:
+        print(SEC)
         print("Deep RL solution: ", opt[0])
         print("Optimal solution: ", objective[0])
         break
