@@ -23,6 +23,7 @@ def Combination(n, set):
     return result
 
 def optimizer(S, V, L, map, d):
+    # print(S)
     try:
         matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
         matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
@@ -193,7 +194,12 @@ class Agent:
     
     def action(self, state):
         if numpy.random.rand() <= self.epsilon:
-            return numpy.random.randint(self.action_size)
+            next = numpy.random.randint(self.action_size)
+            while next == state:
+                next = numpy.random.randint(self.action_size)
+            while [state, next, 0, next, True] in self.memory:
+                next = numpy.random.randint(self.action_size)
+            return next
         q_values = self.model.predict(numpy.array([state]))
         return numpy.argmax(q_values[0])
     
@@ -205,7 +211,7 @@ class Agent:
             print("Optimal solution: ", modelObj)
             if self.epsilon > self.epsilon_min:
                 self.epsilon *= self.epsilon_decay
-            for j in range(100):
+            for j in range(10):
                 goodpath = []
                 for i in range(len(self.memory) - 1, 0, -1):
                     goodpath.append(self.memory[i])
@@ -220,10 +226,9 @@ class Agent:
             content += str(elem) + "\n"
         f.write(content)
         f.close()
-        if self.explore >= self.action_size:
-            self.explore = 0
+        if len(self.memory) % math.factorial(self.action_size) >= self.explore and self.explore != 0:
+            self.explore = math.factorial(self.action_size)
             self.seclen += 1
-        self.explore += 1
         
     def tuning(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
@@ -255,23 +260,23 @@ colors = ["red", "yellow", "green", "blue", "black"]
 V = 17
 L = 4
 d = [
- [9999, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 0, 3, 5, 8, 8, 5],
- [3, 9999, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 0, 3, 8, 8, 5],
+[9999, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 7, 3, 5, 8, 8, 5],
+ [3, 9999, 3, 48, 48, 8, 8, 5, 5, 7, 7, 3, 19, 3, 8, 8, 5],
  [5, 3, 9999, 72, 72, 48, 48, 24, 24, 3, 3, 5, 3, 0, 48, 48, 24],
  [48, 48, 74, 9999, 0, 6, 6, 12, 12, 48, 48, 48, 48, 74, 6, 6, 12],
  [48, 48, 74, 0, 9999, 6, 6, 12, 12, 48, 48, 48, 48, 74, 6, 6, 12],
- [8, 8, 50, 6, 6, 9999, 0, 8, 8, 8, 8, 8, 8, 50, 0, 0, 8],
- [8, 8, 50, 6, 6, 0, 9999, 8, 8, 8, 8, 8, 8, 50, 0, 0, 8],
- [5, 5, 26, 12, 12, 8, 8, 9999, 0, 5, 5, 5, 5, 26, 8, 8, 0],
- [5, 5, 26, 12, 12, 8, 8, 0, 9999, 5, 5, 5, 5, 26, 8, 8, 0],
- [3, 0, 3, 48, 48, 8, 8, 5, 5, 9999, 0, 3, 0, 3, 8, 8, 5],
- [3, 0, 3, 48, 48, 8, 8, 5, 5, 0, 9999, 3, 0, 3, 8, 8, 5],
- [0, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 9999, 3, 5, 8, 8, 5],
- [3, 0, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 9999, 3, 8, 8, 5],
+ [8, 8, 50, 6, 6, 9999, 0, 8, 8, 8, 8, 8, 8, 50, 12, 12, 8],
+ [8, 8, 50, 6, 6, 0, 9999, 8, 8, 8, 8, 8, 8, 50, 12, 12, 8],
+ [5, 5, 26, 12, 12, 8, 8, 9999, 12, 5, 5, 5, 5, 26, 8, 8, 7],
+ [5, 5, 26, 12, 12, 8, 8, 12, 9999, 5, 5, 5, 5, 26, 8, 8, 7],
+ [3, 7, 3, 48, 48, 8, 8, 5, 5, 9999, 14, 3, 0, 3, 8, 8, 5],
+ [3, 7, 3, 48, 48, 8, 8, 5, 5, 14, 9999, 3, 0, 3, 8, 8, 5],
+ [7, 3, 5, 48, 48, 8, 8, 5, 5, 3, 3, 9999, 3, 5, 8, 8, 5],
+ [3, 19, 3, 48, 48, 8, 8, 5, 5, 0, 0, 3, 9999, 3, 8, 8, 5],
  [5, 3, 0, 72, 72, 48, 48, 24, 24, 3, 3, 5, 3, 9999, 48, 48, 24],
- [8, 8, 50, 6, 6, 0, 0, 8, 8, 8, 8, 8, 8, 50, 9999, 0, 8],
- [8, 8, 50, 6, 6, 0, 0, 8, 8, 8, 8, 8, 8, 50, 0, 9999, 8],
- [5, 5, 26, 12, 12, 8, 8, 0, 0, 5, 5, 5, 5, 26, 8, 8, 9999]
+ [8, 8, 50, 6, 6, 12, 12, 8, 8, 8, 8, 8, 8, 50, 9999, 0, 8],
+ [8, 8, 50, 6, 6, 12, 12, 8, 8, 8, 8, 8, 8, 50, 0, 9999, 8],
+ [5, 5, 26, 12, 12, 8, 8, 7, 7, 5, 5, 5, 5, 26, 8, 8, 9999]
 ]
 
 nodesMin0 = list(range(1, V))
@@ -288,26 +293,29 @@ for i in range(V):
 
 objective = optimizer(S, V, L, map, d)
 
-init = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]]
+# init = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14], [15, 16]]
 
-for elem in init:
-    if elem in S:
-        S.remove(elem)
+S = []
+
+opt = optimizer([], V, L, map, d)
+subtours = checkSubtour(V, L, opt[1], opt[2])
+S_potential = Combination(len(subtours), subtours)
+for elem in S_potential:
+    if elem not in S:
+        S.append(elem)
+
+print(S)
 
 agent = Agent(S)
-batch = 100
+batch = 10
 episodes = 10000
 
 for episode in range(episodes):
     done = False
     itnum = 0
-    SEC = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]]
+    SEC = []
     state = -1
     reward = 0
-    opt = optimizer(SEC, V, L, map, d)
-    subtours = checkSubtour(V, L, opt[1], opt[2])
-    if len(subtours) == 0:
-        reward += opt[0]
     while not done and itnum <= agent.seclen:
         act = agent.action(state)
         # next = S[act] 
@@ -327,6 +335,7 @@ for episode in range(episodes):
         done = True     
     if agent.epsilon <= agent.epsilon_min:
         print(SEC)
+        print(len(S))
         print("Deep RL solution: ", opt[0])
         print("Optimal solution: ", objective[0])
         break
