@@ -178,7 +178,7 @@ class Agent:
         self.memory = []
         self.gamma = 0.95
         self.epsilon = 1.0
-        self.epsilon_min = 0.01
+        self.epsilon_min = 0.05
         self.epsilon_decay = 0.75
         self.model = self.model()
         self.explore = 0
@@ -186,14 +186,15 @@ class Agent:
         
     def model(self):
         model = keras.Sequential()
-        model.add(keras.layers.Dense(50, input_dim=1, activation='linear'))
-        model.add(keras.layers.Dense(50, input_dim=50, activation='linear'))
+        model.add(keras.layers.Dense(50, input_dim=1, activation='relu'))
+        model.add(keras.layers.Dense(50, input_dim=50, activation='relu'))
         model.add(keras.layers.Dense(self.action_size, activation='relu'))
         model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
         return model
     
     def action(self, state):
         if numpy.random.rand() <= self.epsilon:
+            print("yes")
             next = numpy.random.randint(self.action_size)
             while next == state:
                 next = numpy.random.randint(self.action_size)
