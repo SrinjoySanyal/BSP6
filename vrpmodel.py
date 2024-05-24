@@ -8,19 +8,36 @@ import keras
 import numpy
 import random
 import math
+import threading
 
 def Combination(n, set):
-    Q = []
+    res = []
+    def addSubset(start, end):
+        for i in range(2, 4):
+            combs = itertools.combinations(set, i)
+            for elem in combs:
+                # print(list(elem))
+                res.append(list(elem))
     
-    for i in range(2, n):
-        Q.append(list(itertools.combinations(set, i)))
+    threads = []
+    i = 2
+    while i + 2 <= n:
+        thread = threading.Thread(target=addSubset, args=(i, i+2))
+        thread.start()
+        threads.append(thread)
+        i = i + 3
+    if i < n and i + 2 > n:
+        # print(i)
+        thread = threading.Thread(target=addSubset, args=(i, n))
+        thread.start()
+        threads.append(thread)
     
-    result = []
-    for i in Q:
-        for j in i:
-            result.append(list(j))
+    for thread in threads:
+        thread.join()
     
-    return result
+    print(res)
+    
+    return res
 
 def optimizer(S, V, L, map, d):
     # print(S)
