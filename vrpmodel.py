@@ -1,279 +1,6 @@
-import gurobipy
-from gurobipy import GRB
-import itertools
 from sklearn.manifold import MDS
-import matplotlib.pyplot
-import matplotlib.colors
-import keras
-import numpy
-import random
-import math
-import threading
-
-def Combination(n, set):
-    res = []
-    def addSubset(start, end):
-        for i in range(2, 4):
-            combs = itertools.combinations(set, i)
-            for elem in combs:
-                # print(list(elem))
-                res.append(list(elem))
-    
-    threads = []
-    i = 2
-    while i + 2 <= n:
-        thread = threading.Thread(target=addSubset, args=(i, i+2))
-        thread.start()
-        threads.append(thread)
-        i = i + 3
-    if i < n and i + 2 > n:
-        # print(i)
-        thread = threading.Thread(target=addSubset, args=(i, n))
-        thread.start()
-        threads.append(thread)
-    
-    for thread in threads:
-        thread.join()
-    
-    print(res)
-    
-    return res
-
-def optimizer(S, V, L, map, d):
-    # print(S)
-    try:
-        matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
-        matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
-        m = gurobipy.Model("vrp", env=env)
-        #create variables
-        x = {}
-        for l in range(L):
-            for i in range(V):
-                for j in range(V):
-                    if i == j:
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif d[i][j] == 0:
-                        # if there is no edge from i to j then d[i][j] = 0
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif i != j:
-                        x[i, j, l] = m.addVar(lb=0, ub=1, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-
-        #set objective function
-        m.setObjective(gurobipy.quicksum([d[i][j]*x[i,j,l] for i in range(V) for j in range(V) for l in range(L)]), GRB.MINIMIZE)
-
-        #set constraints
-        for l in range(L):
-            m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
-            m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
-            
-        for i in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V) for l in range(L)]) == 1, "c3t%sin%s"%(l,i))
-                
-        for j in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for i in range(V) for l in range(L)]) == 1, "c4t%sout%s"%(l,j))
-            
-        for i in range(1, V):
-            for l in range(L):
-                m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V)]) == gurobipy.quicksum([x[j, i, l] for j in range(V)]))
-
-        for subtour in S:
-            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour if i != j for lorry in range(L)) <= len(subtour) - 1, "sec%s"%subtour)
-                
-        m.write("VRP-DFJ.lp")
-
-        m.optimize()
-        status = m.Status
-        print("Solution status: ", status)
-        if status == GRB.OPTIMAL:
-            all_vars = m.getVars()
-            values = m.getAttr("X", all_vars)
-            names = m.getAttr("VarName", all_vars)
-
-            for name, val in zip(names, values):
-                for t in range(L):
-                    for i in range(V):
-                        for j in range(V):
-                            if val != 0 and "(%s,%s,%s)"%(i, j, t) in name:
-                                matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])
-                                matplotlib.pyplot.axis("off")
-                            
-        matplotlib.pyplot.savefig("map.png")
-        matplotlib.pyplot.close()
-        return [m.getAttr("ObjVal"), names, values]
-    
-    except AttributeError:
-        matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
-        matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
-        m = gurobipy.Model("vrp", env=env)
-        #create variables
-        x = {}
-        for l in range(L):
-            for i in range(V):
-                for j in range(V):
-                    if i == j:
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif d[i][j] == 0:
-                        # if there is no edge from i to j then d[i][j] = 0
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif i != j:
-                        x[i, j, l] = m.addVar(lb=0, ub=1, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-
-        #set objective function
-        m.setObjective(gurobipy.quicksum([d[i][j]*x[i,j,l] for i in range(V) for j in range(V) for l in range(L)]), GRB.MINIMIZE)
-
-        #set constraints
-        for l in range(L):
-            m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
-            m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
-            
-        for i in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V) for l in range(L)]) == 1, "c3t%sin%s"%(l,i))
-                
-        for j in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for i in range(V) for l in range(L)]) == 1, "c4t%sout%s"%(l,j))
-            
-        for i in range(1, V):
-            for l in range(L):
-                m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V)]) == gurobipy.quicksum([x[j, i, l] for j in range(V)]))
-
-        for subtour in S:
-            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour if i != j for lorry in range(L)) <= len(subtour) - 1, "sec%s"%subtour)
-                
-        m.write("VRP-DFJ.lp")
-
-        m.optimize()
-        status = m.Status
-        names = ""
-        values = ""
-        print("Solution status: ", status)
-        if status == GRB.OPTIMAL:
-            all_vars = m.getVars()
-            values = m.getAttr("X", all_vars)
-            names = m.getAttr("VarName", all_vars)
-
-            for name, val in zip(names, values):
-                for t in range(L):
-                    for i in range(V):
-                        for j in range(V):
-                            if val != 0 and "(%s,%s,%s)"%(i, j, t) in name:
-                                matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])    
-                                matplotlib.pyplot.axis("off")           
-        matplotlib.pyplot.savefig("map.png")
-        matplotlib.pyplot.close()
-        return [1000000, names, values]
-
-def go(start, looped, V, L, names, values):
-    if start == 0:
-        return looped
-    else:
-        for name, val in zip(names, values):
-            for t in range(L):
-                for j in range(V):
-                    if name == "x(%s,%s,%s)"%(start, j, t) and val != 0:
-                        looped[j] = 1
-                        # print(looped)
-                        return go(j, looped, V, L, names, values)
-
-def checkSubtour(V, L, names, values):
-    looped = [0 for i in range(V)]
-    toreach = []
-    for name, val in zip(names, values):
-        for t in range(L):
-            for j in range(V):
-                if name == "x(%s,%s,%s)"%(0,j,t) and val != 0:
-                    looped[j] = 1
-                    toreach.append(j)
-                    
-    for elem in toreach:
-        looped = go(elem, looped, V, L, names, values)
-    return [i for i in range(V) if looped[i] == 0]
-    
-class Agent:
-    def __init__(self, S):
-        self.state_size = len(S)
-        self.action_size = len(S)
-        self.memory = []
-        self.gamma = 0.95
-        self.epsilon = 1.0
-        self.epsilon_min = 0.05
-        self.epsilon_decay = 0.75
-        self.model = self.model()
-        self.explore = 0
-        self.seclen = 0
-        
-    def model(self):
-        model = keras.Sequential()
-        model.add(keras.layers.Dense(50, input_dim=1, activation='relu'))
-        model.add(keras.layers.Dense(50, input_dim=50, activation='relu'))
-        model.add(keras.layers.Dense(self.action_size, activation='relu'))
-        model.compile(optimizer=keras.optimizers.Adam(), loss=keras.losses.MeanSquaredError())
-        return model
-    
-    def action(self, state):
-        if numpy.random.rand() <= self.epsilon:
-            print("yes")
-            next = numpy.random.randint(self.action_size)
-            while next == state:
-                next = numpy.random.randint(self.action_size)
-            while [state, next, 0, next, True] in self.memory:
-                next = numpy.random.randint(self.action_size)
-            return next
-        q_values = self.model.predict(numpy.array([state]))
-        return numpy.argmax(q_values[0])
-    
-    def remember(self, state, action, reward, next_state, done, objVal, modelObj):
-        self.memory.append([state, action, reward, next_state, done])
-        if reward > 0 and done == True:
-            print("optim found")
-            print("Deep RL solution: ", objVal)
-            print("Optimal solution: ", modelObj)
-            if self.epsilon > self.epsilon_min:
-                self.epsilon *= self.epsilon_decay
-            for j in range(10):
-                goodpath = []
-                for i in range(len(self.memory) - 1, 0, -1):
-                    goodpath.append(self.memory[i])
-                    self.memory[i][2] = reward
-                    if self.memory[i][0] == -1:
-                        break
-                for elem in goodpath[::-1]:
-                    self.memory.append(elem)    
-        f = open("memory.txt", "w")
-        content = ""
-        for elem in self.memory:
-            content += str(elem) + "\n"
-        f.write(content)
-        f.close()
-        if len(self.memory) % math.factorial(self.action_size) >= self.explore and self.explore != 0:
-            self.explore = math.factorial(self.action_size)
-            self.seclen += 1
-        
-    def tuning(self, batch_size):
-        minibatch = random.sample(self.memory, batch_size)
-        for elem in minibatch:
-            state = elem[0]
-            action = elem[1]
-            reward = elem[2]
-            next_state = elem[3]
-            done = elem[4]
-            if not done:
-                target = reward + self.gamma * numpy.max(self.model.predict(numpy.array([next_state]))[0])
-            else:
-                target = reward
-            Q = self.model.predict(numpy.array([state]))
-            Q[0][action] = target
-            self.model.fit(x=numpy.array([state]), y=Q)
-        # if self.epsilon > self.epsilon_min:
-        #     self.epsilon *= self.epsilon_decay
-
-options = {
-    "WLSACCESSID": "9aadbf35-dba3-4158-b503-3b68b4e0d6dd",
-    "WLSSECRET": "2cd0ea41-6f53-419b-8696-c93718870444",
-    "LICENSEID": 2489877,
-}
-
-env = gurobipy.Env(params=options)
-colors = ["red", "yellow", "green", "blue", "black"]
+from agent import Agent
+from solution import checkSubtour, Combination2, optimizer
 
 V = 17
 L = 4
@@ -297,8 +24,28 @@ d = [
  [5, 5, 26, 12, 12, 8, 8, 7, 7, 5, 5, 5, 5, 26, 8, 8, 9999]
 ]
 
+# d = [
+# [99999, 548, 776, 696, 582, 274, 502, 194, 308, 194, 536, 502, 388, 354, 468, 776, 662],
+#       [548, 99999, 684, 308, 194, 502, 730, 354, 696, 742, 1084, 594, 480, 674, 1016, 868, 1210],
+#       [776, 684, 99999, 992, 878, 502, 274, 810, 468, 742, 400, 1278, 1164, 1130, 788, 1552, 754],
+#       [696, 308, 992, 99999, 114, 650, 878, 502, 844, 890, 1232, 514, 628, 822, 1164, 560, 1358],
+#       [582, 194, 878, 114, 99999, 536, 764, 388, 730, 776, 1118, 400, 514, 708, 1050, 674, 1244],
+#       [274, 502, 502, 650, 536, 99999, 228, 308, 194, 240, 582, 776, 662, 628, 514, 1050, 708],
+#       [502, 730, 274, 878, 764, 228, 99999, 536, 194, 468, 354, 1004, 890, 856, 514, 1278, 480],
+#       [194, 354, 810, 502, 388, 308, 536, 99999, 342, 388, 730, 468, 354, 320, 662, 742, 856],
+#       [308, 696, 468, 844, 730, 194, 194, 342, 99999, 274, 388, 810, 696, 662, 320, 1084, 514],
+#       [194, 742, 742, 890, 776, 240, 468, 388, 274, 99999, 342, 536, 422, 388, 274, 810, 468],
+#       [536, 1084, 400, 1232, 1118, 582, 354, 730, 388, 342, 99999, 878, 764, 730, 388, 1152, 354],
+#       [502, 594, 1278, 514, 400, 776, 1004, 468, 810, 536, 878, 99999, 114, 308, 650, 274, 844],
+#       [388, 480, 1164, 628, 514, 662, 890, 354, 696, 422, 764, 114, 99999, 194, 536, 388, 730],
+#       [354, 674, 1130, 822, 708, 628, 856, 320, 662, 388, 730, 308, 194, 99999, 342, 422, 536],
+#       [468, 1016, 788, 1164, 1050, 514, 514, 662, 320, 274, 388, 650, 536, 342, 99999, 764, 194],
+#       [776, 868, 1552, 560, 674, 1050, 1278, 742, 1084, 810, 1152, 274, 388, 422, 764, 99999, 798],
+#       [662, 1210, 754, 1358, 1244, 708, 480, 856, 514, 468, 354, 844, 730, 536, 194, 798, 99999],
+# ]
+
 nodesMin0 = list(range(1, V))
-S = Combination(V - 1, nodesMin0)
+S = Combination2(V - 1, nodesMin0)
 
 mapper = MDS(n_components=2)
 map = mapper.fit_transform(d)
@@ -311,49 +58,46 @@ for i in range(V):
 
 objective = optimizer(S, V, L, map, d)
 
-# init = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14], [15, 16]]
+# objective = optimizer([[7, 4, 8, 9, 6]], V, L, map, d)
 
 S = []
 
 opt = optimizer([], V, L, map, d)
 subtours = checkSubtour(V, L, opt[1], opt[2])
-S_potential = Combination(len(subtours), subtours)
-for elem in S_potential:
-    if elem not in S:
-        S.append(elem)
+S = Combination2(len(subtours), subtours)
 
 print(S)
 
-agent = Agent(S)
+agent = Agent(S, len(S), len(S))
 batch = 10
 episodes = 10000
 
 for episode in range(episodes):
-    done = False
-    itnum = 0
     SEC = []
     state = -1
     reward = 0
-    while not done and itnum <= agent.seclen:
-        act = agent.action(state)
-        # next = S[act] 
-        SEC.append(S[act])
-        opt = optimizer(SEC, V, L, map, d)
-        subtours = checkSubtour(V, L, opt[1], opt[2])
-        if len(subtours) == 0:
-            reward += (totaldist - opt[0])
-            done = True
-        agent.remember(state, act, reward, act, done, opt[0], objective[0])
-        state = act
-        itnum += 1
-        if len(agent.memory)>batch:
+    for iter in range(agent.seclen):
+        # perform action
+        action = agent.action(state)
+        SEC.append(S[action])
+        solution = optimizer(SEC, V, L, map, d)
+        
+        # get reward for action
+        orphans = checkSubtour(V, L, solution[1], solution[2])
+        if len(orphans) == 0:
+            reward += (totaldist - solution[0]) / 1000
+            agent.remember(state, action, reward, action, True, objective[0], solution[0], -1)
+            break
+        else:
+            agent.remember(state, action, reward, action, False, objective[0], solution[0], -1)
+        state = action
+        if len(agent.memory) >= batch:
             agent.tuning(batch)
-    if len(agent.memory) > 0:
-        agent.memory[len(agent.memory)-1][4] = True
-        done = True     
+    if len(agent.memory) != 0:
+        agent.memory[len(agent.memory) - 1][4] = True
     if agent.epsilon <= agent.epsilon_min:
-        print(SEC)
-        print(len(S))
-        print("Deep RL solution: ", opt[0])
+        print(S[action])
         print("Optimal solution: ", objective[0])
+        print("Model solution: ", solution[0])
         break
+        
