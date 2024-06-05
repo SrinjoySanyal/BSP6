@@ -35,21 +35,22 @@ mapper = MDS(n_components=2)
 map = mapper.fit_transform(d)
 
 testCases = [
-             [0.65, 0.75], [0.75, 0.75], [0.55, 0.75], [0.45, 0.75], 
-             [0.65, 0.65], [0.75, 0.65], [0.55, 0.65], [0.45, 0.65],
+            #  [0.65, 0.65], [0.75, 0.65], [0.55, 0.65], [0.45, 0.65],
              [0.65, 0.55], [0.75, 0.55], [0.55, 0.55], [0.45, 0.55],
              [0.65, 0.45], [0.75, 0.45], [0.55, 0.45], [0.45, 0.45],
-             [0.65, 0.35], [0.75, 0.35], [0.55, 0.35], 
-             [0.45, 0.35]]
+             [0.65, 0.35], [0.75, 0.35], [0.55, 0.35], [0.45, 0.35]
+             ]
 
-# SEC = [[1, 3, 4], [2, 6], [10, 14, 16], [11, 15], [3, 15], [14, 16]]
+# SEC = [[1, 3, 4], [2, 6], [10, 14, 16], [11, 15], [2, 6, 10], [11, 12], [3, 4], [11, 12, 15], [14, 16]]
+# # SEC = []
 # solution = optimizer(SEC, V, L, map, d, q, Q)
+# # print(solution)
 # # print(solution)
 # # check if new subtours are created after applying the SEC
 # orphans = checkSubtour(V, L, solution[1], solution[2])
 # print(orphans)
 
-obj = 6208
+# obj = 6208
 
 file1 = open("1orMore.csv", mode='w', newline='')
 writer = csv.writer(file1)
@@ -58,12 +59,14 @@ writer.writerow(["gamma", "epsilon_decay", "iterations", "execution_time", "solu
 file2 = open("1only.csv", mode='w', newline='')
 writer = csv.writer(file2)
 writer.writerow(["gamma", "epsilon_decay", "iterations", "execution_time", "solution_gap"])
+
+res = optimizer([], V, L, map, d, q, Q)
     
 for case in testCases:
     for i in range(5):
-        moreThan1SEC(V, L, d, q, Q, map, case[0], case[1], file1, obj)
+        moreThan1SEC(V, L, d, q, Q, map, case[0], case[1], file1)
 
 for case in testCases:
     for i in range(5):
-        only1SEC(V, L, d, q, Q, map, case[0], case[1], file2, obj)
+        only1SEC(V, L, d, q, Q, map, case[0], case[1], file2)
     
