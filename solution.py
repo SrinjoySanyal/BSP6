@@ -44,8 +44,8 @@ def Combination(setNodes, V, L, names, values):
         setNodes = [i for i in setNodes if i not in tour]
     return Q
 
-def optimizer(S, V, L, map, d):
-    # print(S)
+def optimizer(S, V, L, map, d, q, Q):
+    print("SEC: ", S)
     try:
         matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
         matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
@@ -56,37 +56,43 @@ def optimizer(S, V, L, map, d):
             for i in range(V):
                 for j in range(V):
                     if i == j:
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif d[i][j] == 0:
-                        # if there is no edge from i to j then d[i][j] = 0
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
+                        x[i, j, l] = m.addVar(lb=0.0, ub=0.0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
+                    # elif d[i][j] == 0:
+                    #     # if there is no edge from i to j then d[i][j] = 0
+                    #     x[i, j, l] = m.addVar(lb=0.0, ub=0.0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
                     elif i != j:
-                        x[i, j, l] = m.addVar(lb=0, ub=1, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
+                        x[i, j, l] = m.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
 
         #set objective function
-        m.setObjective(gurobipy.quicksum([d[i][j]*x[i,j,l] for i in range(V) for j in range(V) for l in range(L)]), GRB.MINIMIZE)
+        m.setObjective(gurobipy.quicksum([d[i][j]*x[i,j,l] for i in range(V) for j in range(V) for l in range(L) if i != j]), GRB.MINIMIZE)
 
         #set constraints
-        for l in range(L):
-            m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
-            m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
-            
-        for i in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V) for l in range(L)]) == 1, "c3t%sin%s"%(l,i))
-                
-        for j in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for i in range(V) for l in range(L)]) == 1, "c4t%sout%s"%(l,j))
-            
-        for i in range(1, V):
+        totaldem = 0
+        for elem in q:
+            totaldem += elem
+        
+        if totaldem <= Q*L:  
             for l in range(L):
-                m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V)]) == gurobipy.quicksum([x[j, i, l] for j in range(V)]))
+                m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
+                m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
+        else:
+            print("No depot constraint")
+        
+        for i in range(1, V):
+            m.addConstr(gurobipy.quicksum([x[j, i, l] for j in range(V) for l in range(L)]) == 1, "assign1_to_arc_truck_%s"%l)
+            m.addConstr(gurobipy.quicksum([x[i, k, l] for k in range(V) for l in range(L)]) == 1, "assign2_to_arc_truck_%s"%i)    
+            
+        for j in range(1, V):
+            for i in range(1, V):
+                if i != j:
+                    m.addConstr(gurobipy.quicksum([x[i, j, l] for l in range(L)]) == gurobipy.quicksum([x[j, k, l] for k in range(1, V) for l in range(L) if k != i]))
 
         for subtour in S:
-            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour if i != j for lorry in range(L)) <= len(subtour) - 1, "sec%s"%subtour)
+            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour for lorry in range(L) if i != j) <= len(subtour) - 1, "sec%s"%subtour)
+            
+        for l in range(L):
+            m.addConstr(gurobipy.quicksum([x[i,j,l]*q[j] for i in range(V) for j in range(1, V) if i != j]) <= Q, "capconstr%s"%l)
         
-        # for subtour in S:
-        #     nonsubtour = [i for i in range(V) if i not in subtour]
-        #     m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in nonsubtour if i != j for lorry in range(L)) >= 2, "sec%s"%subtour)
                 
         m.write("VRP-DFJ.lp")
 
@@ -131,26 +137,28 @@ def optimizer(S, V, L, map, d):
         m.setObjective(gurobipy.quicksum([d[i][j]*x[i,j,l] for i in range(V) for j in range(V) for l in range(L)]), GRB.MINIMIZE)
 
         #set constraints
-        for l in range(L):
-            m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
-            m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
-            
-        for i in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V) for l in range(L)]) == 1, "c3t%sin%s"%(l,i))
-                
-        for j in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[i,j,l] for i in range(V) for l in range(L)]) == 1, "c4t%sout%s"%(l,j))
-            
-        for i in range(1, V):
+        totaldem = 0
+        for elem in q:
+            totaldem += elem
+        
+        if totaldem <= Q*L:
             for l in range(L):
-                m.addConstr(gurobipy.quicksum([x[i,j,l] for j in range(V)]) == gurobipy.quicksum([x[j, i, l] for j in range(V)]))
+                m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
+                m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
+            
+        for i in range(1, V):
+            m.addConstr(gurobipy.quicksum([x[j, i, l] for j in range(V) for l in range(L)]) == 1, "assign1_to_arc_truck_%s"%l)
+            m.addConstr(gurobipy.quicksum([x[i, j, l] for j in range(V) for l in range(L)]) == 1, "assign2_to_arc_truck_%s"%i)    
+            
+        for j in range(1, V):
+            for i in range(1, V):
+                m.addConstr(gurobipy.quicksum([x[i, j, l] for l in range(L)]) == gurobipy.quicksum([x[j, k, l] for k in range(V) for l in range(L) if k != i]))
 
         for subtour in S:
-            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour if i != j for lorry in range(L)) <= len(subtour) - 1, "sec%s"%subtour)
+            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour for lorry in range(L) if i != j) <= len(subtour) - 1, "sec%s"%subtour)
             
-        # for subtour in S:
-        #     nonsubtour = [i for i in range(V) if i not in subtour]
-        #     m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in nonsubtour if i != j for lorry in range(L)) >= 2, "sec%s"%subtour)
+        for l in range(L):
+            m.addConstr(gurobipy.quicksum([q[j]*x[i,j,l] for i in range(V) for j in range(1, V) if i != j]) <= Q)
                 
         m.write("VRP-DFJ.lp")
 

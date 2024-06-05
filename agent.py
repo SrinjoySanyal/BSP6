@@ -4,18 +4,18 @@ import math
 import random
 
 class Agent:
-    def __init__(self, S, stateSize, actionSize):
+    def __init__(self, S, actionSize, gamma, decay):
         self.S = S
-        self.state_size = stateSize
+        # self.state_size = stateSize
         self.action_size = actionSize
         self.memory = []
-        self.gamma = 0.95
+        self.gamma = gamma #0.65
         self.epsilon = 1.0
         self.epsilon_min = 0.05
-        self.epsilon_decay = 0.75
+        self.epsilon_decay = decay #0.75
         self.model = self.model()
         self.explore = 0
-        self.seclen = 1
+        self.seclen = 1000
         
     def model(self):
         model = keras.Sequential()
@@ -50,30 +50,22 @@ class Agent:
         q_values = self.model.predict(numpy.array([state]))
         return numpy.argmax(q_values[0])
     
-    def remember(self, state, action, reward, next_state, done, objVal, modelObj, startState):
+    def remember(self, state, action, reward, next_state, done, modelObj, startState, initSet):
         self.memory.append([state, action, reward, next_state, done])
         if reward > 0 and done == True:
             print("optim found")
             print("Deep RL solution: ", modelObj)
-            print("Optimal solution: ", objVal)
             if self.epsilon > self.epsilon_min:
                 self.epsilon *= self.epsilon_decay
             for j in range(10):
-                goodpath = []
-                for i in range(len(self.memory) - 1, 0, -1):
-                    goodpath.append(self.memory[i])
-                    # self.memory[i][2] = reward
-                    if self.memory[i][0] == startState:
-                        break
-                for elem in goodpath[::-1]:
-                    self.memory.append(elem)    
+                self.memory.append([state, action, reward, next_state, done])
         f = open("memory.txt", "w")
         content = ""
         for elem in self.memory:
-            if elem[0] != -1:
+            if elem[0] != startState:
                 arr = [self.S[elem[0]], elem[1], elem[2], self.S[elem[3]], elem[4]]
             else:
-                arr = [[], elem[1], elem[2], self.S[elem[3]], elem[4]]
+                arr = [initSet, elem[1], elem[2], self.S[elem[3]], elem[4]]
             content += (str(arr) + "\n")
         f.write(content)
         # print(self.memory)
