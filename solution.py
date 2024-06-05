@@ -117,71 +117,7 @@ def optimizer(S, V, L, map, d, q, Q):
         return [m.getAttr("ObjVal"), names, values]
     
     except AttributeError:
-        matplotlib.pyplot.scatter(map[1:,0], map[1:,1])
-        matplotlib.pyplot.plot(map[0, 0], map[0, 1], "ro")
-        m = gurobipy.Model("vrp", env=env)
-        #create variables
-        x = {}
-        for l in range(L):
-            for i in range(V):
-                for j in range(V):
-                    if i == j:
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif d[i][j] == 0:
-                        # if there is no edge from i to j then d[i][j] = 0
-                        x[i, j, l] = m.addVar(lb=0, ub=0, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-                    elif i != j:
-                        x[i, j, l] = m.addVar(lb=0, ub=1, vtype=GRB.BINARY, name="x(%s,%s,%s)"%(i,j,l))
-
-        #set objective function
-        m.setObjective(gurobipy.quicksum([d[i][j]*x[i,j,l] for i in range(V) for j in range(V) for l in range(L)]), GRB.MINIMIZE)
-
-        #set constraints
-        totaldem = 0
-        for elem in q:
-            totaldem += elem
-        
-        if totaldem <= Q*L:
-            for l in range(L):
-                m.addConstr(gurobipy.quicksum([x[i,0,l] for i in range(1, V)]) == 1, "c%s"%l)
-                m.addConstr(gurobipy.quicksum([x[0,j,l] for j in range(1, V)]) == 1, "c2t%s"%l)
-            
-        for i in range(1, V):
-            m.addConstr(gurobipy.quicksum([x[j, i, l] for j in range(V) for l in range(L)]) == 1, "assign1_to_arc_truck_%s"%l)
-            m.addConstr(gurobipy.quicksum([x[i, j, l] for j in range(V) for l in range(L)]) == 1, "assign2_to_arc_truck_%s"%i)    
-            
-        for j in range(1, V):
-            for i in range(1, V):
-                m.addConstr(gurobipy.quicksum([x[i, j, l] for l in range(L)]) == gurobipy.quicksum([x[j, k, l] for k in range(V) for l in range(L) if k != i]))
-
-        for subtour in S:
-            m.addConstr(gurobipy.quicksum(x[i,j,lorry] for i in subtour for j in subtour for lorry in range(L) if i != j) <= len(subtour) - 1, "sec%s"%subtour)
-            
-        for l in range(L):
-            m.addConstr(gurobipy.quicksum([q[j]*x[i,j,l] for i in range(V) for j in range(1, V) if i != j]) <= Q)
-                
-        m.write("VRP-DFJ.lp")
-
-        m.optimize()
-        status = m.Status
-        names = ""
-        values = ""
-        print("Solution status: ", status)
-        if status == GRB.OPTIMAL:
-            all_vars = m.getVars()
-            values = m.getAttr("X", all_vars)
-            names = m.getAttr("VarName", all_vars)
-
-            for name, val in zip(names, values):
-                for t in range(L):
-                    for i in range(V):
-                        for j in range(V):
-                            if val != 0 and "(%s,%s,%s)"%(i, j, t) in name:
-                                matplotlib.pyplot.plot([map[i][0], map[j][0]], [map[i][1], map[j][1]], color=colors[t])    
-                                matplotlib.pyplot.axis("off")           
-        matplotlib.pyplot.savefig("map.png")
-        matplotlib.pyplot.close()
-        return [1000000, names, values]
+        return [1000000, '', '']
 
 def go(start, looped, V, L, names, values, end):
     # print(start, end)
